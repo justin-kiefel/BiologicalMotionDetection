@@ -97,7 +97,7 @@ resDict = {}
 
 
 for i,deltas in enumerate(delta_list):
-  resDict[i] = runModel(deltas, raw_x, raw_y)
+  resDict[i] = runModelNew(deltas, raw_x, raw_y)
 
 
 print(resDict)
