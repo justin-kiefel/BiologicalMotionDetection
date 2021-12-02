@@ -1,8 +1,13 @@
 import numpy as np
 import os
 import cv2 as cv
+
 import tensorflow as tf
-import keras
+import tensorflow.keras as keras
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import LSTM
+from keras.layers import Dropout
 
 from numpy.core.numeric import count_nonzero
 from sklearn.kernel_ridge import KernelRidge 
@@ -55,7 +60,7 @@ def extractFeatures(data, delta, one_region=True):
         # Adaptive Threshold for Motion - ???try fixed threshold later???
         mag, _ = cv.cartToPolar(cur[...,0], cur[...,1])
         mag = np.array(mag , dtype=np.uint8)
-        blur = cv.GaussianBlur(mag,(13,13),cv.BORDER_DEFAULT)
+        blur = cv.GaussianBlur(mag,(25,25),cv.BORDER_DEFAULT)
         thr, motionMask = cv.threshold(blur,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
 
         # Identify motion regions
@@ -67,6 +72,9 @@ def extractFeatures(data, delta, one_region=True):
         else:
             contours = contours if (len(contours) > 0) else []
             cv.drawContours(image=regionMask, contours=contours, contourIdx=-1, color=255, thickness=-1)
+        
+        cv.imshow("debug", regionMask)
+        cv.waitKey(0)
 
         # Get average kinematics for all non zero regions or main region
         prevRegionFlow = prev[np.where(regionMask == 255)[0],np.where(regionMask == 255)[1],:]
@@ -124,6 +132,32 @@ def baseline(raw_x, raw_y):
 
 
 def baseLSTM(raw_x, raw_y):
+    # Stack Examples
+    X = np.stack(raw_x)
+    # Convert Y to One-Hot
+    Y = np.zeros((len(raw_y),2))
+    Y_vals = np.array(raw_y)
+    Y[Y_vals == 1, 1] = 1
+    Y[Y_vals == -1, 0] = 1
+    print(Y)
+    
+    X_train, X_test, Y_train, Y_test = train_test_split(X,Y,test_size=0.2, random_state=42)
+
+    lr = .005
+    epochs = 5
+    dropout = 0.5
+    hidden_size = [10,20,30,40,50,60]
+    # Also search for number of time steps used
+    for hidden in hidden_size:
+        model = Sequential()
+        model.add(LSTM(units=hidden, return_sequences=False, input_shape=(60,4)))
+        model.add(Dropout(dropout))
+        model.add(Dense(2, activation='sigmoid'))
+        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        print(model.summary())
+        model.fit(tf.convert_to_tensor(X_train), tf.convert_to_tensor(Y_train), epochs=epochs, batch_size=30)
+        scores = model.evaluate(tf.convert_to_tensor(X_test), tf.convert_to_tensor(Y_test), verbose=0)
+        print("Accuracy: %.2f%%" % (scores[1]*100))
     return 
 
 
